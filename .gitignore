@@ -8,6 +8,7 @@ data/
 dist/
 node_modules/
 tests/tmp/
+package-lock.json
 
 # Wrangler config files (contain secrets/IDs)
 wrangler.toml

@@ -62,6 +62,7 @@
     "@hono/node-server": "1",
     "esbuild": "latest",
     "husky": "9",
+    "typescript": "5",
     "vitest": "4",
     "wrangler": "4"
   },
