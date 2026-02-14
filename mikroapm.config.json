@@ -1,0 +1,9 @@
+{
+  "sites": [
+    {
+      "url": "https://mikaelvesavuori.se",
+      "timeout": 10000
+    }
+  ],
+  "checkIntervalMinutes": 1
+}

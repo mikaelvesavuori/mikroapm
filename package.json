@@ -1,0 +1,54 @@
+{
+  "name": "mikroapm",
+  "version": "1.0.0",
+  "description": "Ultralight uptime monitoring with pluggable storage adapters",
+  "main": "src/index.js",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./server": "./src/adapters/hono-server/index.js",
+    "./workers": "./src/adapters/cf-workers/index.js",
+    "./storage": "./src/storage/index.js",
+    "./core": "./src/core/index.js"
+  },
+  "scripts": {
+    "build": "node scripts/build.js",
+    "build:server": "node scripts/build.js server",
+    "build:workers": "node scripts/build.js workers",
+    "cleanup": "node scripts/cleanup.js",
+    "deploy:workers": "npx wrangler deploy -c wrangler.toml",
+    "dev:server": "node examples/server/dev.js",
+    "lint:fix": "biome check . --write",
+    "lint": "biome check .",
+    "start:server": "node examples/server/start.js",
+    "teardown:workers": "npx wrangler delete --name mikroapm",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "uptime",
+    "monitoring",
+    "apm",
+    "health-check",
+    "cloudflare-workers",
+    "hono"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "hono": "4",
+    "mikrovalid": "1",
+    "pikodb": "1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2",
+    "@hono/node-server": "1",
+    "esbuild": "latest",
+    "vitest": "4",
+    "wrangler": "4"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

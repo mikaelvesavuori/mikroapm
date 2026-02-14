@@ -1,0 +1,15 @@
+.claude/
+.DS_Store
+.env
+.wrangler/
+*.log
+coverage/
+data/
+dist/
+node_modules/
+tests/tmp/
+
+# Wrangler config files (contain secrets/IDs)
+wrangler.toml
+wrangler-*.toml
+!wrangler*.example.toml

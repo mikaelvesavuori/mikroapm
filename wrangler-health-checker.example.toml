@@ -1,0 +1,20 @@
+name = "uptime-health-checker"
+main = "health-checker.js"
+compatibility_date = "2025-11-01"
+
+[triggers]
+crons = ["* * * * *"]  # Every minute (change to match CHECK_INTERVAL_MINUTES below)
+
+[[kv_namespaces]]
+binding = "UPTIME_KV"
+id = "your-kv-namespace-id-here"
+
+[vars]
+CHECK_INTERVAL_MINUTES = "1"  # Must match cron frequency above
+ALERT_FROM_EMAIL = "alerts@yourdomain.com"
+ALERT_FROM_NAME = "Uptime Monitor"
+ALERT_TO_EMAIL = "you@yourdomain.com"
+ALERT_THRESHOLD = "3"
+
+# Secrets (set via wrangler secret put BREVO_API_KEY):
+# BREVO_API_KEY = "your-brevo-api-key-here"
