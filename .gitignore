@@ -13,3 +13,6 @@ tests/tmp/
 wrangler.toml
 wrangler-*.toml
 !wrangler*.example.toml
+
+*.tgz
+*.zip

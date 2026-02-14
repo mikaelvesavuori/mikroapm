@@ -1,0 +1,21 @@
+{
+  "sites": [
+    {
+      "url": "https://example.com",
+      "timeout": 10000,
+      "alertEmail": "you@example.com"
+    },
+    {
+      "url": "https://api.example.com/health",
+      "timeout": 5000
+    }
+  ],
+  "checkIntervalMinutes": 1,
+  "enableSummaryWrites": true,
+  "alerts": {
+    "threshold": 3,
+    "fromEmail": "alerts@yourdomain.com",
+    "fromName": "MikroAPM",
+    "toEmail": "fallback@example.com"
+  }
+}

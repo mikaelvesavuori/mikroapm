@@ -1,7 +1,25 @@
 {
   "name": "mikroapm",
-  "version": "1.0.0",
   "description": "Ultralight uptime monitoring with pluggable storage adapters",
+  "version": "1.0.0",
+  "author": "Mikael Vesavuori",
+  "license": "MIT",
+  "keywords": [
+    "uptime",
+    "monitoring",
+    "apm",
+    "health-check",
+    "cloudflare-workers",
+    "hono"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikaelvesavuori/mikroapm"
+  },
+  "bugs": {
+    "url": "https://github.com/mikaelvesavuori/mikroapm/issues"
+  },
+  "homepage": "https://github.com/mikaelvesavuori/mikroapm",
   "main": "src/index.js",
   "type": "module",
   "exports": {
@@ -10,6 +28,18 @@
     "./workers": "./src/adapters/cf-workers/index.js",
     "./storage": "./src/storage/index.js",
     "./core": "./src/core/index.js"
+  },
+  "files": [
+    "src",
+    "scripts",
+    "examples",
+    "LICENSE",
+    "README.md",
+    "mikroapm.config.example.json",
+    "wrangler.example.toml"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
   },
   "scripts": {
     "build": "node scripts/build.js",
@@ -24,31 +54,20 @@
     "teardown:workers": "npx wrangler delete --name mikroapm",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
-  },
-  "keywords": [
-    "uptime",
-    "monitoring",
-    "apm",
-    "health-check",
-    "cloudflare-workers",
-    "hono"
-  ],
-  "author": "",
-  "license": "MIT",
-  "dependencies": {
-    "hono": "4",
-    "mikrovalid": "1",
-    "pikodb": "1"
+    "test:coverage": "vitest run --coverage",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@biomejs/biome": "2",
     "@hono/node-server": "1",
     "esbuild": "latest",
+    "husky": "9",
     "vitest": "4",
     "wrangler": "4"
   },
-  "engines": {
-    "node": ">=24.0.0"
+  "dependencies": {
+    "hono": "4",
+    "mikrovalid": "1",
+    "pikodb": "1"
   }
 }

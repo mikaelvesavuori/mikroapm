@@ -2,6 +2,8 @@
 
 Ultralight uptime monitoring. Checks your sites, stores failures, optionally sends email alerts via [Brevo](https://www.brevo.com/), and serves a dashboard.
 
+![MikroAPM dashboard example](./mikroapm-dashboard.png)
+
 Two adapters included: **Cloudflare Workers + KV** and **Hono server + PikoDB**.
 
 ## Quick start

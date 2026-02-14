@@ -1,0 +1,24 @@
+name = "mikroapm"
+main = "dist/workers.js"
+compatibility_date = "2025-11-01"
+
+# Cron schedule for health checks
+[triggers]
+crons = ["* * * * *"]  # Every minute (change to match CHECK_INTERVAL_MINUTES below)
+
+# KV namespace for storing uptime data
+[[kv_namespaces]]
+binding = "UPTIME_KV"
+id = "your-kv-namespace-id-here"
+
+# Configuration variables
+[vars]
+CHECK_INTERVAL_MINUTES = "1"        # Must match cron frequency above
+ENABLE_SUMMARY_WRITES = "true"      # Set to "false" for minimal KV writes
+ALERT_FROM_EMAIL = "alerts@yourdomain.com"
+ALERT_FROM_NAME = "MikroAPM"
+ALERT_TO_EMAIL = "you@yourdomain.com"
+ALERT_THRESHOLD = "3"               # Consecutive failures before alerting
+
+# Secrets (set via: npx wrangler secret put BREVO_API_KEY)
+# BREVO_API_KEY = "your-brevo-api-key-here"

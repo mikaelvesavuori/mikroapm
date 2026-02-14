@@ -1,7 +1,0 @@
-name = "uptime-dashboard"
-main = "dashboard.js"
-compatibility_date = "2025-11-01"
-
-[[kv_namespaces]]
-binding = "UPTIME_KV"
-id = "your-kv-namespace-id-here"
