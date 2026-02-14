@@ -74,12 +74,12 @@ export class ConfigManager {
       checkIntervalMinutes: ConfigManager._resolveNumber(
         env.CHECK_INTERVAL_MINUTES,
         configFile.checkIntervalMinutes,
-        1
+        1,
       ),
       enableSummaryWrites: ConfigManager._resolveBoolean(
         env.ENABLE_SUMMARY_WRITES,
         configFile.enableSummaryWrites,
-        true
+        true,
       ),
       alerts: ConfigManager._resolveAlerts(env, configFile.alerts),
     };

@@ -23,7 +23,12 @@ const SERVICE_SESSION_START = Date.now();
  * @returns {Hono} Configured Hono app
  */
 export function createHonoApp(options = {}) {
-  const { configPath = "./mikroapm.config.json", dbPath = "./data/mikroapm", env = {}, storage: providedStorage } = options;
+  const {
+    configPath = "./mikroapm.config.json",
+    dbPath = "./data/mikroapm",
+    env = {},
+    storage: providedStorage,
+  } = options;
 
   const app = new Hono();
 
@@ -31,7 +36,12 @@ export function createHonoApp(options = {}) {
   const raw = readFileSync(configPath, "utf-8");
   const configManager = ConfigManager.create(storage, env, JSON.parse(raw));
   const alertService = new AlertService(configManager);
-  const healthCheckService = new HealthCheckService(storage, configManager, alertService, SERVICE_SESSION_START);
+  const healthCheckService = new HealthCheckService(
+    storage,
+    configManager,
+    alertService,
+    SERVICE_SESSION_START,
+  );
   const dashboardService = new DashboardService(storage);
 
   app.use(async (_c, next) => {
@@ -145,10 +155,15 @@ export function startServer(options = {}) {
 
   // Start built-in scheduler if enabled
   if (enableScheduler) {
-    const raw = readFileSync(configPath, 'utf-8');
+    const raw = readFileSync(configPath, "utf-8");
     const configManager = ConfigManager.create(storage, env, JSON.parse(raw));
     const alertService = new AlertService(configManager);
-    const healthCheckService = new HealthCheckService(storage, configManager, alertService, SERVICE_SESSION_START);
+    const healthCheckService = new HealthCheckService(
+      storage,
+      configManager,
+      alertService,
+      SERVICE_SESSION_START,
+    );
 
     const interval = (checkIntervalMinutes || configManager.getCheckIntervalMinutes()) * 60 * 1000;
 
@@ -176,7 +191,7 @@ export function startServer(options = {}) {
         }
         console.log(`Health check completed for ${sites.length} site(s)`);
       } catch (error) {
-        console.error('Health check failed:', error);
+        console.error("Health check failed:", error);
       }
     }, interval);
   }

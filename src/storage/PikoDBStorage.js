@@ -28,7 +28,7 @@ export class PikoDBStorage extends StorageInterface {
 
     // PikoDB returns { d: data, v: version, t: timestamp, x: expiration }
     // Extract the actual data from the 'd' field
-    const value = typeof result === 'object' && result.d !== undefined ? result.d : result;
+    const value = typeof result === "object" && result.d !== undefined ? result.d : result;
 
     if (value === undefined || value === null) return null;
 
