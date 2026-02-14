@@ -42,20 +42,23 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "build": "node scripts/build.js",
     "build:server": "node scripts/build.js server",
     "build:workers": "node scripts/build.js workers",
+    "build": "node scripts/build.js",
     "cleanup": "node scripts/cleanup.js",
     "deploy:workers": "npx wrangler deploy -c wrangler.toml",
     "dev:server": "node examples/server/dev.js",
+    "licenses": "grant check sbom.json --config .grant.yaml",
     "lint:fix": "biome check . --write",
     "lint": "biome check .",
+    "prepare": "husky",
+    "sbom": "syft file:package-lock.json --output spdx-json > ./sbom.json",
+    "scan": "grype ./sbom.json -o json",
     "start:server": "node examples/server/start.js",
     "teardown:workers": "npx wrangler delete --name mikroapm",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "prepare": "husky"
+    "test:watch": "vitest",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@biomejs/biome": "2",
