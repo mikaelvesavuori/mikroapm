@@ -1,7 +1,7 @@
 {
   "name": "mikroapm",
   "description": "Ultralight uptime monitoring with pluggable storage adapters",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Mikael Vesavuori",
   "license": "MIT",
   "keywords": [
@@ -21,6 +21,9 @@
   },
   "homepage": "https://github.com/mikaelvesavuori/mikroapm",
   "main": "src/index.js",
+  "bin": {
+    "mikroapm": "./dist/server.js"
+  },
   "type": "module",
   "exports": {
     ".": "./src/index.js",
@@ -31,6 +34,7 @@
   },
   "files": [
     "src",
+    "dist/server.js",
     "scripts",
     "examples",
     "LICENSE",
@@ -43,6 +47,7 @@
   },
   "scripts": {
     "build:server": "node scripts/build.js server",
+    "prepublishOnly": "npm run build:server",
     "build:workers": "node scripts/build.js workers",
     "build": "node scripts/build.js",
     "cleanup": "node scripts/cleanup.js",

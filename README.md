@@ -23,8 +23,14 @@ Create a `mikroapm.config.json`:
 Start the server:
 
 ```bash
-npm install
-npm run dev:server
+npx mikroapm
+```
+
+Or install globally and run:
+
+```bash
+npm install -g mikroapm
+mikroapm
 ```
 
 Open `http://localhost:3000` for the dashboard.
@@ -32,13 +38,13 @@ Open `http://localhost:3000` for the dashboard.
 **Built-in scheduler**: Health checks run automatically on startup and every minute by default. Configure the interval with `CHECK_INTERVAL_MINUTES`:
 
 ```bash
-CHECK_INTERVAL_MINUTES=5 npm run dev:server  # Check every 5 minutes
+CHECK_INTERVAL_MINUTES=5 npx mikroapm  # Check every 5 minutes
 ```
 
 To disable the built-in scheduler and trigger checks manually:
 
 ```bash
-ENABLE_SCHEDULER=false npm run dev:server
+ENABLE_SCHEDULER=false npx mikroapm
 
 # Then trigger manually
 curl -X POST http://localhost:3000/api/check
@@ -149,7 +155,7 @@ All configuration options can be set via environment variables. **Environment va
 Server with config file:
 
 ```bash
-BREVO_API_KEY=your-key npm start
+BREVO_API_KEY=your-key npx mikroapm
 ```
 
 Server with environment variables only:
@@ -159,7 +165,7 @@ ALERT_THRESHOLD=5 \
 ALERT_FROM_EMAIL=alerts@example.com \
 ALERT_TO_EMAIL=admin@example.com \
 BREVO_API_KEY=your-key \
-npm start
+npx mikroapm
 ```
 
 Cloudflare Workers (in `wrangler.toml`):
