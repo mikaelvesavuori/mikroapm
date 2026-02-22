@@ -49,3 +49,6 @@ jobs:
 
       - name: Run Grant
         run: npm run licenses
+
+      - name: Publish to npm
+        run: npm publish --access public --provenance
