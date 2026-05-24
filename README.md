@@ -1,6 +1,6 @@
 # MikroAPM
 
-**The minimalist uptime monitor that's all yours.**
+**Simple uptime checks, alerts, and status pages.**
 
 ![MikroAPM product view](./mikroapm.png)
 
