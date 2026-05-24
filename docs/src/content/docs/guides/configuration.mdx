@@ -1,0 +1,78 @@
+---
+title: Configuration
+description: Configure checks, storage, admin access, and runtime settings.
+---
+
+MikroAPM resolves configuration from environment variables, the config file, and defaults.
+
+## Server File
+
+The default server config file is:
+
+```text
+mikroapm.config.json
+```
+
+Use `MIKROAPM_CONFIG_PATH` or `CONFIG_PATH` to point the server at another file.
+
+## Example
+
+```json
+{
+  "sites": [
+    {
+      "name": "Website",
+      "url": "https://example.com",
+      "timeout": 10000,
+      "expectedStatuses": [200, 204],
+      "maxLatencyMs": 2000,
+      "retries": 2,
+      "retryDelayMs": 500
+    }
+  ],
+  "checkIntervalMinutes": 5,
+  "enableSummaryWrites": true,
+  "admin": {
+    "token": "replace-with-a-long-random-token"
+  },
+  "public": {
+    "password": "optional-public-dashboard-password"
+  }
+}
+```
+
+## Site Checks
+
+Each site can set:
+
+| Field | Purpose |
+| --- | --- |
+| `name` | Human-readable label. Defaults to the protocol-less URL. |
+| `url` | URL to check. |
+| `method` | HTTP method, usually `GET` or `POST`. |
+| `headers` | Optional request headers. |
+| `body` | Optional request body. |
+| `timeout` | Request timeout in milliseconds. |
+| `expectedStatuses` | Accepted status codes. |
+| `expectedText` | Text that must appear in the response. |
+| `maxLatencyMs` | Marks checks unhealthy when latency exceeds the limit. |
+| `retries` | Retry count after a failed attempt. |
+| `retryDelayMs` | Delay between retries. |
+| `paused` | Stops checks for the site. |
+| `maintenanceWindows` | Suppresses checks and alerts during planned downtime. |
+| `allowPrivateNetwork` | Allows private or localhost targets. Disabled by default. |
+
+## Runtime Environment
+
+| Variable | Purpose |
+| --- | --- |
+| `MIKROAPM_PORT` or `PORT` | Server port. Defaults to `3000`. |
+| `MIKROAPM_CONFIG_PATH` or `CONFIG_PATH` | Config file path. |
+| `MIKROAPM_DB_PATH` or `DB_PATH` | PikoDB data directory. |
+| `ENABLE_SCHEDULER` | Set to `false` to disable automatic checks. |
+| `CHECK_INTERVAL_MINUTES` | Health check interval. |
+| `ENABLE_SUMMARY_WRITES` | Enables daily summary writes. |
+| `MIKROAPM_ADMIN_TOKEN` or `ADMIN_TOKEN` | Admin password for protected admin APIs. |
+| `MIKROAPM_PUBLIC_PASSWORD` or `PUBLIC_PASSWORD` | Optional password for public status APIs and dashboard data. |
+
+For Cloudflare Workers, keep `CHECK_INTERVAL_MINUTES` aligned with the cron schedule in `wrangler.toml`.

@@ -1,3 +1,5 @@
+import { getSiteDomain, getSiteTimeout, getSuppression } from "./SiteValidator.js";
+
 /**
  * Health check service for monitoring sites
  */
@@ -10,52 +12,213 @@ export class HealthCheckService {
   }
 
   async checkSite(site) {
+    const timestamp = Date.now();
+    const domain = getSiteDomain(site);
+    const suppression = getSuppression(site, timestamp);
+
+    if (suppression) {
+      const status = {
+        domain,
+        url: site.url,
+        name: site.name,
+        status: suppression.status,
+        ok: null,
+        message: suppression.message,
+        checkedAt: timestamp,
+        maintenanceWindow: suppression.maintenanceWindow,
+      };
+      await this.storeStatus(domain, status);
+      return status;
+    }
+
+    const result = await this.runCheckWithRetries(site, timestamp);
+
+    if (result.ok) {
+      const alertState = await this.storage.get(this.getAlertStateKey(domain));
+      await this.clearFailureCount(domain);
+      await this.clearAlertState(domain);
+
+      const status = {
+        domain,
+        url: site.url,
+        name: site.name,
+        status: "operational",
+        ok: true,
+        httpStatus: result.httpStatus,
+        message: result.message,
+        duration: result.duration,
+        attempts: result.attempts,
+        checkedAt: timestamp,
+      };
+      await this.storeStatus(domain, status);
+
+      if (alertState === "down") {
+        await this.alertService.sendRecovery(site, domain, status);
+      }
+
+      return status;
+    }
+
+    const failureData = {
+      status: result.httpStatus || 0,
+      message: result.message,
+      duration: result.duration,
+      attempts: result.attempts,
+    };
+
+    await this.storeFailure(domain, timestamp, failureData);
+    const consecutiveFailures = await this.handleAlert(site, domain, failureData);
+
+    const status = {
+      domain,
+      url: site.url,
+      name: site.name,
+      status: "down",
+      ok: false,
+      httpStatus: result.httpStatus,
+      message: result.message,
+      duration: result.duration,
+      attempts: result.attempts,
+      consecutiveFailures,
+      checkedAt: timestamp,
+    };
+    await this.storeStatus(domain, status);
+
+    return status;
+  }
+
+  async runCheckWithRetries(site, timestamp = Date.now()) {
+    const retries = site.retries || 0;
+    const attempts = retries + 1;
+    let result = null;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      result = await this.runCheckAttempt(site, timestamp);
+      result.attempts = attempt;
+
+      if (result.ok || attempt === attempts) {
+        return result;
+      }
+
+      await delay(site.retryDelayMs ?? 1000);
+    }
+
+    return result;
+  }
+
+  async runCheckAttempt(site, timestamp) {
     const start = Date.now();
-    const timestamp = start;
-    const domain = new URL(site.url).hostname;
+    const timeout = getSiteTimeout(site);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), site.timeout);
-
-      const response = await fetch(site.url, {
+      const method = site.method || "GET";
+      const headers = normalizeRequestHeaders(site.headers);
+      const request = {
+        method,
         signal: controller.signal,
-        headers: { "User-Agent": "MikroAPM/1.0" },
-      });
+        headers,
+      };
 
-      clearTimeout(timeoutId);
+      if (site.body && method !== "GET" && method !== "HEAD") {
+        request.body = site.body;
+      }
+
+      const response = await fetch(site.url, request);
       const duration = Date.now() - start;
 
-      if (!response.ok) {
-        await this.storeFailure(domain, timestamp, {
-          status: response.status,
-          message: `HTTP ${response.status}`,
-          duration,
-        });
-
-        await this.handleAlert(site, domain, {
-          status: response.status,
-          message: `HTTP ${response.status}`,
-          duration,
-        });
-      } else {
-        await this.clearFailureCount(domain);
-      }
+      return await this.evaluateResponse(site, response, duration, timestamp);
     } catch (error) {
       const duration = Date.now() - start;
+      const message = error.name === "AbortError" ? `Timeout after ${timeout}ms` : error.message;
 
-      await this.storeFailure(domain, timestamp, {
-        status: 0,
-        message: error.message,
+      return {
+        ok: false,
+        httpStatus: 0,
+        message,
         duration,
-      });
-
-      await this.handleAlert(site, domain, {
-        status: 0,
-        message: error.message,
-        duration,
-      });
+        checkedAt: timestamp,
+      };
+    } finally {
+      clearTimeout(timeoutId);
     }
+  }
+
+  async evaluateResponse(site, response, duration, timestamp) {
+    const expectedStatuses = getExpectedStatuses(site);
+
+    if (expectedStatuses) {
+      if (!expectedStatuses.includes(response.status)) {
+        return {
+          ok: false,
+          httpStatus: response.status,
+          message: `Expected HTTP ${expectedStatuses.join(", ")}, got ${response.status}`,
+          duration,
+          checkedAt: timestamp,
+        };
+      }
+    } else if (!response.ok) {
+      return {
+        ok: false,
+        httpStatus: response.status,
+        message: `HTTP ${response.status}`,
+        duration,
+        checkedAt: timestamp,
+      };
+    }
+
+    if (site.maxLatencyMs && duration > site.maxLatencyMs) {
+      return {
+        ok: false,
+        httpStatus: response.status,
+        message: `Latency ${duration}ms exceeded ${site.maxLatencyMs}ms`,
+        duration,
+        checkedAt: timestamp,
+      };
+    }
+
+    if (site.expectedText || site.expectedRegex) {
+      const text = await response.text();
+
+      if (site.expectedText && !text.includes(site.expectedText)) {
+        return {
+          ok: false,
+          httpStatus: response.status,
+          message: "Expected response text was not found",
+          duration,
+          checkedAt: timestamp,
+        };
+      }
+
+      if (site.expectedRegex && !new RegExp(site.expectedRegex).test(text)) {
+        return {
+          ok: false,
+          httpStatus: response.status,
+          message: "Expected response pattern was not found",
+          duration,
+          checkedAt: timestamp,
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      httpStatus: response.status,
+      message: "OK",
+      duration,
+      checkedAt: timestamp,
+    };
+  }
+
+  async storeStatus(domain, data) {
+    await this.storage.put(`status:${domain}`, JSON.stringify(data), {
+      expirationTtl: 90 * 24 * 60 * 60,
+    });
+  }
+
+  async getCurrentStatus(domain) {
+    return this.storage.get(`status:${domain}`, "json");
   }
 
   async storeFailure(domain, timestamp, data) {
@@ -81,12 +244,25 @@ export class HealthCheckService {
 
     if (newCount === threshold) {
       await this.alertService.sendAlert(site, domain, failureData, newCount);
+      await this.storage.put(this.getAlertStateKey(domain), "down", {
+        expirationTtl: 90 * 24 * 60 * 60,
+      });
     }
+
+    return newCount;
   }
 
   async clearFailureCount(domain) {
     const failureCountKey = `failure-count:${domain}`;
     await this.storage.delete(failureCountKey);
+  }
+
+  async clearAlertState(domain) {
+    await this.storage.delete(this.getAlertStateKey(domain));
+  }
+
+  getAlertStateKey(domain) {
+    return `alert-state:${domain}`;
   }
 
   async getOrSetMonitoringStart(domain) {
@@ -124,6 +300,10 @@ export class HealthCheckService {
     for (const site of sites) {
       const domain = new URL(site.url).hostname;
 
+      if (getSuppression(site, now)) {
+        continue;
+      }
+
       // Get when monitoring started for this domain
       const monitoringStart = await this.getOrSetMonitoringStart(domain);
 
@@ -158,4 +338,32 @@ export class HealthCheckService {
       );
     }
   }
+}
+
+function normalizeRequestHeaders(headers = {}) {
+  const normalized = { ...headers };
+  const hasUserAgent = Object.keys(normalized).some((key) => key.toLowerCase() === "user-agent");
+
+  if (!hasUserAgent) {
+    normalized["User-Agent"] = "MikroAPM/1.0";
+  }
+
+  return normalized;
+}
+
+function getExpectedStatuses(site) {
+  if (Array.isArray(site.expectedStatuses) && site.expectedStatuses.length > 0) {
+    return site.expectedStatuses;
+  }
+
+  if (Number.isInteger(site.expectedStatus)) {
+    return [site.expectedStatus];
+  }
+
+  return null;
+}
+
+async function delay(ms) {
+  if (!ms) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }

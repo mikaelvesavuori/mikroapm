@@ -1,10 +1,10 @@
-import { existsSync, rmSync, mkdirSync } from 'node:fs';
-import { PikoDBStorage } from '../../src/storage/PikoDBStorage.js';
+import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { PikoDBStorage } from "../../src/storage/PikoDBStorage.js";
 
 /**
  * Create a temporary test database
  */
-export function createTestDb(name = 'test') {
+export function createTestDb(name = "test") {
   const dbPath = `./tests/tmp/${name}-${Date.now()}`;
 
   if (existsSync(dbPath)) {
@@ -20,7 +20,7 @@ export function createTestDb(name = 'test') {
  * Clean up a test database
  */
 export function cleanupTestDb(storage) {
-  if (storage && storage.dbPath && existsSync(storage.dbPath)) {
+  if (storage?.dbPath && existsSync(storage.dbPath)) {
     rmSync(storage.dbPath, { recursive: true, force: true });
   }
 }
@@ -29,7 +29,7 @@ export function cleanupTestDb(storage) {
  * Clean up all test databases
  */
 export function cleanupAllTestDbs() {
-  const tmpDir = './tests/tmp';
+  const tmpDir = "./tests/tmp";
   if (existsSync(tmpDir)) {
     rmSync(tmpDir, { recursive: true, force: true });
   }

@@ -1,19 +1,42 @@
 {
   "sites": [
     {
+      "name": "Website",
       "url": "https://example.com",
       "timeout": 10000,
+      "expectedStatuses": [200, 204],
+      "maxLatencyMs": 2000,
+      "retries": 2,
+      "retryDelayMs": 500,
       "alertEmail": "you@example.com"
     },
     {
+      "name": "API",
       "url": "https://api.example.com/health",
-      "timeout": 5000
+      "method": "GET",
+      "timeout": 5000,
+      "expectedText": "ok",
+      "maintenanceWindows": [
+        {
+          "start": "2026-05-01T00:00:00.000Z",
+          "end": "2026-05-01T01:00:00.000Z",
+          "reason": "Planned deploy"
+        }
+      ]
     }
   ],
   "checkIntervalMinutes": 1,
   "enableSummaryWrites": true,
+  "admin": {
+    "token": "change-me"
+  },
+  "public": {
+    "password": "optional-public-dashboard-password"
+  },
   "alerts": {
     "threshold": 3,
+    "webhookUrl": "https://hooks.example.com/mikroapm",
+    "webhookSecret": "shared-secret",
     "fromEmail": "alerts@yourdomain.com",
     "fromName": "MikroAPM",
     "toEmail": "fallback@example.com"

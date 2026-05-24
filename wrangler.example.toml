@@ -19,6 +19,12 @@ ALERT_FROM_EMAIL = "alerts@yourdomain.com"
 ALERT_FROM_NAME = "MikroAPM"
 ALERT_TO_EMAIL = "you@yourdomain.com"
 ALERT_THRESHOLD = "3"               # Consecutive failures before alerting
+WEBHOOK_URL = "https://hooks.example.com/mikroapm"
 
-# Secrets (set via: npx wrangler secret put BREVO_API_KEY)
+# Secrets:
+# npx wrangler secret put MIKROAPM_ADMIN_TOKEN
+# npx wrangler secret put WEBHOOK_SECRET
+# npx wrangler secret put BREVO_API_KEY
+# MIKROAPM_ADMIN_TOKEN = "your-admin-token-here"
+# WEBHOOK_SECRET = "your-webhook-secret-here"
 # BREVO_API_KEY = "your-brevo-api-key-here"

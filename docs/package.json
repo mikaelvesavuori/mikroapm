@@ -1,0 +1,35 @@
+{
+  "name": "mikroapm-docs",
+  "type": "module",
+  "version": "1.0.0",
+  "keywords": [
+    "mikroapm",
+    "documentation",
+    "docs",
+    "starlight"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mikaelvesavuori/mikroapm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mikaelvesavuori/mikroapm/issues"
+  },
+  "homepage": "https://github.com/mikaelvesavuori/mikroapm#readme",
+  "private": true,
+  "description": "The documentation site for MikroAPM.",
+  "author": "MikroAPM",
+  "license": "MIT",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "latest",
+    "astro": "latest",
+    "typescript": "6"
+  }
+}

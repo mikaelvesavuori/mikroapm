@@ -1,0 +1,49 @@
+---
+title: Alerts
+description: Configure webhook and email alert delivery.
+---
+
+MikroAPM sends alerts when a site crosses the configured consecutive failure threshold and when it recovers.
+
+## Webhooks
+
+```json
+{
+  "alerts": {
+    "threshold": 3,
+    "webhookUrl": "https://hooks.example.com/mikroapm",
+    "webhookSecret": "shared-secret"
+  }
+}
+```
+
+The webhook receives events such as `site.down` and `site.recovered`. When `webhookSecret` is set, MikroAPM sends it in the `x-mikroapm-webhook-secret` header.
+
+## Email
+
+Email alerts use Brevo:
+
+```bash
+BREVO_API_KEY="replace-with-brevo-key"
+ALERT_FROM_EMAIL="alerts@example.com"
+ALERT_FROM_NAME="MikroAPM"
+ALERT_TO_EMAIL="admin@example.com"
+```
+
+Per-site `alertEmail` overrides the fallback `ALERT_TO_EMAIL`.
+
+## Maintenance Windows
+
+Use maintenance windows to suppress checks and notifications during planned work:
+
+```json
+{
+  "maintenanceWindows": [
+    {
+      "start": "2026-05-01T00:00:00.000Z",
+      "end": "2026-05-01T01:00:00.000Z",
+      "reason": "Planned deploy"
+    }
+  ]
+}
+```

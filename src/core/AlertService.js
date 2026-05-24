@@ -9,6 +9,69 @@ export class AlertService {
   async sendAlert(site, domain, failureData, consecutiveFailures) {
     if (!this.config.hasAlerts()) return;
 
+    await Promise.all([
+      this.sendWebhook("site.down", site, domain, {
+        status: "down",
+        failure: failureData,
+        consecutiveFailures,
+      }),
+      this.sendEmailAlert(site, domain, failureData, consecutiveFailures),
+    ]);
+  }
+
+  async sendRecovery(site, domain, resultData) {
+    if (!this.config.hasAlerts()) return;
+
+    await this.sendWebhook("site.recovered", site, domain, {
+      status: "operational",
+      result: resultData,
+    });
+  }
+
+  async sendWebhook(event, site, domain, data) {
+    const webhookUrl = this.config.getWebhookUrl();
+    if (!webhookUrl) return;
+
+    const payload = {
+      event,
+      domain,
+      site: {
+        name: site.name,
+        url: site.url,
+        method: site.method || "GET",
+      },
+      timestamp: new Date().toISOString(),
+      data,
+    };
+
+    const headers = {
+      "Content-Type": "application/json",
+      "User-Agent": "MikroAPM/1.0",
+    };
+
+    const webhookSecret = this.config.getWebhookSecret();
+    if (webhookSecret) {
+      headers.Authorization = `Bearer ${webhookSecret}`;
+      headers["x-mikroapm-webhook-secret"] = webhookSecret;
+    }
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("Webhook notification error:", error);
+      }
+    } catch (error) {
+      console.error("Failed to send webhook notification:", error);
+    }
+  }
+
+  async sendEmailAlert(site, domain, failureData, consecutiveFailures) {
     const brevoKey = this.config.getBrevoApiKey();
     if (!brevoKey) return;
 

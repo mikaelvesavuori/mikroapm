@@ -1,4 +1,7 @@
 {
+  "admin": {
+    "token": "demo"
+  },
   "sites": [
     {
       "url": "https://mikaelvesavuori.se",

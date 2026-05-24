@@ -8,6 +8,9 @@ allow:
   - Apache-2.0
   - ISC
   - 0BSD
+  - CC0-1.0
+  - Unlicense
+
 deny:
   - GPL-3.0
   - AGPL-3.0

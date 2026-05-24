@@ -1,3 +1,5 @@
+import { getSiteDomain, toPublicSite } from "./SiteValidator.js";
+
 /**
  * Dashboard service for querying uptime data
  */
@@ -42,7 +44,38 @@ export class DashboardService {
       period: `${days} days`,
       totalChecks,
       totalFailures,
+      currentStatus: await this.getCurrentStatus(domain),
       dailySummaries: summaries.reverse(),
+    };
+  }
+
+  async getCurrentStatus(domain) {
+    const status = await this.storage.get(`status:${domain}`, "json");
+    return (
+      status || {
+        domain,
+        status: "unknown",
+        ok: null,
+        message: "No checks have completed yet",
+      }
+    );
+  }
+
+  async getStatusData(sites) {
+    const statuses = await Promise.all(
+      sites.map(async (site) => {
+        const publicSite = toPublicSite(site);
+        const currentStatus = await this.getCurrentStatus(getSiteDomain(site));
+        return {
+          ...publicSite,
+          currentStatus,
+        };
+      }),
+    );
+
+    return {
+      generatedAt: new Date().toISOString(),
+      sites: statuses,
     };
   }
 

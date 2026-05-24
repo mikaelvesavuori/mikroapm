@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ConfigManager } from '../../src/core/ConfigManager.js';
-import { AlertService } from '../../src/core/AlertService.js';
-import { HealthCheckService } from '../../src/core/HealthCheckService.js';
-import { DashboardService } from '../../src/core/DashboardService.js';
-import { createTestDb, cleanupTestDb } from '../helpers/testUtils.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AlertService } from "../../src/core/AlertService.js";
+import { ConfigManager } from "../../src/core/ConfigManager.js";
+import { DashboardService } from "../../src/core/DashboardService.js";
+import { HealthCheckService } from "../../src/core/HealthCheckService.js";
+import { cleanupTestDb, createTestDb } from "../helpers/testUtils.js";
 
-describe('Integration: Complete Flow', () => {
+describe("Integration: Complete Flow", () => {
   let storage;
   let config;
   let alertService;
@@ -13,39 +13,55 @@ describe('Integration: Complete Flow', () => {
   let dashboardService;
 
   beforeEach(() => {
-    storage = createTestDb('integration');
+    vi.spyOn(global, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.url;
+
+      if (url.includes("this-domain-definitely-does-not-exist-12345.com")) {
+        throw new Error("Network error");
+      }
+
+      return {
+        ok: true,
+        status: 200,
+        text: async () => "",
+      };
+    });
+
+    storage = createTestDb("integration");
 
     const configData = {
       sites: [
-        { url: 'https://httpbin.org/status/200', timeout: 10000 },
-        { url: 'https://httpbin.org/delay/1', timeout: 5000 }
+        { url: "https://example.test/status/200", timeout: 10000 },
+        { url: "https://example.test/delay/1", timeout: 5000 },
       ],
       alerts: {
         threshold: 2,
-        fromEmail: 'test@example.com',
-        fromName: 'Test Monitor',
-        toEmail: 'admin@example.com'
-      }
+        fromEmail: "test@example.com",
+        fromName: "Test Monitor",
+        toEmail: "admin@example.com",
+      },
     };
 
-    config = ConfigManager.create(storage, { BREVO_API_KEY: 'test-key' }, configData);
+    config = ConfigManager.create(storage, { BREVO_API_KEY: "test-key" }, configData);
     alertService = new AlertService(config);
+    vi.spyOn(alertService, "sendAlert").mockResolvedValue();
     healthCheckService = new HealthCheckService(storage, config, alertService);
     dashboardService = new DashboardService(storage);
   });
 
   afterEach(() => {
     cleanupTestDb(storage);
+    vi.restoreAllMocks();
   });
 
-  it('should complete full monitoring cycle', async () => {
+  it("should complete full monitoring cycle", async () => {
     // 1. Get initial sites
     const sites = await config.getSites();
     expect(sites).toHaveLength(2);
 
     // Set monitoring start to 1 hour ago so checks will be calculated
-    const oneHourAgo = Date.now() - (60 * 60 * 1000);
-    await storage.put('monitoring-start:httpbin.org', oneHourAgo.toString());
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    await storage.put("monitoring-start:example.test", oneHourAgo.toString());
 
     // 2. Run health checks
     await healthCheckService.runChecks(sites);
@@ -54,38 +70,48 @@ describe('Integration: Complete Flow', () => {
     await healthCheckService.updateDailySummaries(sites);
 
     // 4. Verify summaries were created
-    const today = new Date().toISOString().split('T')[0];
-    const summary1 = await storage.get('summary:httpbin.org:' + today, 'json');
-    const summary2 = await storage.get('summary:httpbin.org:' + today, 'json');
+    const today = new Date().toISOString().split("T")[0];
+    const summary1 = await storage.get(`summary:example.test:${today}`, "json");
+    const summary2 = await storage.get(`summary:example.test:${today}`, "json");
 
     expect(summary1).toBeDefined();
     expect(summary1.checks).toBeGreaterThan(0);
     expect(summary2).toBeDefined();
 
     // 5. Get uptime data via dashboard service
-    const uptimeData = await dashboardService.getUptimeData('httpbin.org', 1);
+    const uptimeData = await dashboardService.getUptimeData("example.test", 1);
 
-    expect(uptimeData.domain).toBe('httpbin.org');
+    expect(uptimeData.domain).toBe("example.test");
     expect(uptimeData.totalChecks).toBeGreaterThan(0);
   });
 
-  it('should handle site configuration updates', async () => {
+  it("should handle site configuration updates", async () => {
     // 1. Get initial sites
     const initialSites = await config.getSites();
     expect(initialSites).toHaveLength(2);
 
     // 2. Update sites
     const newSites = [
-      { url: 'https://example.com', timeout: 10000 },
-      { url: 'https://example.org', timeout: 10000 },
-      { url: 'https://example.net', timeout: 10000 }
+      { url: "https://example.com", timeout: 10000 },
+      { url: "https://example.org", timeout: 10000 },
+      { url: "https://example.net", timeout: 10000 },
     ];
 
     await config.setSites(newSites);
 
     // 3. Verify sites were updated
     const updatedSites = await config.getSites();
-    expect(updatedSites).toEqual(newSites);
+    expect(updatedSites).toEqual(
+      newSites.map((site) => ({
+        ...site,
+        name: new URL(site.url).host,
+        method: "GET",
+        headers: {},
+        paused: false,
+        retries: 0,
+        retryDelayMs: 1000,
+      })),
+    );
     expect(updatedSites).toHaveLength(3);
 
     // 4. Run checks with new sites
@@ -93,23 +119,23 @@ describe('Integration: Complete Flow', () => {
     await healthCheckService.updateDailySummaries(updatedSites);
 
     // 5. Verify summaries for new sites
-    const today = new Date().toISOString().split('T')[0];
-    const summary = await storage.get(`summary:example.com:${today}`, 'json');
+    const today = new Date().toISOString().split("T")[0];
+    const summary = await storage.get(`summary:example.com:${today}`, "json");
 
     expect(summary).toBeDefined();
   });
 
-  it('should track failures across multiple checks', async () => {
+  it("should track failures across multiple checks", async () => {
     // Use a site that will definitely fail
     const failingSite = {
-      url: 'https://this-domain-definitely-does-not-exist-12345.com',
-      timeout: 2000
+      url: "https://this-domain-definitely-does-not-exist-12345.com",
+      timeout: 2000,
     };
 
-    const domain = 'this-domain-definitely-does-not-exist-12345.com';
+    const domain = "this-domain-definitely-does-not-exist-12345.com";
 
     // Set monitoring start to 1 hour ago so checks will be calculated
-    const oneHourAgo = Date.now() - (60 * 60 * 1000);
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
     await storage.put(`monitoring-start:${domain}`, oneHourAgo.toString());
 
     // Run multiple checks to trigger failures
@@ -118,7 +144,7 @@ describe('Integration: Complete Flow', () => {
     }
 
     // Verify failures were stored
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     const failures = await storage.list({ prefix: `failure:${domain}:${today}:` });
 
     expect(failures.keys.length).toBeGreaterThan(0);
@@ -127,7 +153,7 @@ describe('Integration: Complete Flow', () => {
     await healthCheckService.updateDailySummaries([failingSite]);
 
     // Verify summary reflects failures
-    const summary = await storage.get(`summary:${domain}:${today}`, 'json');
+    const summary = await storage.get(`summary:${domain}:${today}`, "json");
 
     expect(summary).toBeDefined();
     expect(summary.failures).toBeGreaterThan(0);
@@ -137,30 +163,30 @@ describe('Integration: Complete Flow', () => {
     const dayFailures = await dashboardService.getDayFailures(domain, today);
 
     expect(dayFailures.failures.length).toBeGreaterThan(0);
-    expect(dayFailures.failures[0]).toHaveProperty('timestamp');
-    expect(dayFailures.failures[0]).toHaveProperty('status');
-    expect(dayFailures.failures[0]).toHaveProperty('message');
-    expect(dayFailures.failures[0]).toHaveProperty('duration');
+    expect(dayFailures.failures[0]).toHaveProperty("timestamp");
+    expect(dayFailures.failures[0]).toHaveProperty("status");
+    expect(dayFailures.failures[0]).toHaveProperty("message");
+    expect(dayFailures.failures[0]).toHaveProperty("duration");
   }, 15000);
 
-  it('should maintain data consistency across services', async () => {
+  it("should maintain data consistency across services", async () => {
     const sites = await config.getSites();
     const domain = new URL(sites[0].url).hostname;
 
     // Store some test failure data
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     const timestamp = Date.now();
 
     await healthCheckService.storeFailure(domain, timestamp, {
       status: 500,
-      message: 'Test Error',
-      duration: 100
+      message: "Test Error",
+      duration: 100,
     });
 
     await healthCheckService.storeFailure(domain, timestamp + 60000, {
       status: 503,
-      message: 'Service Unavailable',
-      duration: 150
+      message: "Service Unavailable",
+      duration: 150,
     });
 
     // Update summaries
@@ -174,7 +200,7 @@ describe('Integration: Complete Flow', () => {
     expect(dayFailures.failures.length).toBeGreaterThanOrEqual(2);
 
     // Verify data in storage directly
-    const summary = await storage.get(`summary:${domain}:${today}`, 'json');
+    const summary = await storage.get(`summary:${domain}:${today}`, "json");
     expect(summary.failures).toBeGreaterThanOrEqual(2);
   });
 });

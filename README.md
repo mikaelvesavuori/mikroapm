@@ -1,16 +1,57 @@
 # MikroAPM
 
-Ultralight uptime monitoring. Checks your sites, stores failures, optionally sends email alerts via [Brevo](https://www.brevo.com/), and serves a dashboard.
+**The minimalist uptime monitor that's all yours.**
 
-![MikroAPM dashboard example](./mikroapm-dashboard.png)
+![MikroAPM product view](./mikroapm.png)
 
-Two adapters included: **Cloudflare Workers + KV** and **Hono server + PikoDB**.
+MikroAPM is an ultralight uptime monitoring service that checks configured sites, stores failures, sends webhook and optional email notifications, and serves a small public status dashboard.
 
-## Quick start
+## Related Mikro Tool
 
-### Server (Hono + PikoDB)
+MikroAPM tells you whether a service is reachable and when it went down or recovered. Pair it with [MikroScope](https://mikrosuite.com/scope/docs) when you also want to inspect the structured logs behind an incident.
 
-Create a `mikroapm.config.json`:
+## Features
+
+- **Batteries included** - health checks, storage, alerting, and dashboard together
+- **Two adapters** - Cloudflare Workers + KV or Hono server + PikoDB
+- **Automatic scheduling** for server and Worker deployments
+- **Protected admin API** for site management, manual checks, and cleanup
+- **Webhook notifications** for down and recovered events
+- **Optional email alerts** through Brevo when failure thresholds are reached
+- **Current status records** with last check, duration, status code, and message
+- **Flexible checks** with method, headers, body, expected status, response matching, latency limits, retries, and timeouts
+- **Pause and maintenance windows** for planned downtime
+- **Unified configuration** with environment variables overriding config files
+- **Cost-aware storage** with optional low-write summary mode for KV
+- **Read-only public dashboard** for configured site status, failures, and daily summaries
+- **OpenAPI document** at `/openapi.json`
+
+## Quick Start
+
+### Download the Server
+
+```bash
+mkdir -p mikroapm/api mikroapm/app
+ROOT="$PWD/mikroapm"
+
+curl -sSL -o "$ROOT/mikroapm_api.zip" https://releases.mikrosuite.com/mikroapm_api_latest.zip
+curl -sSL -o "$ROOT/mikroapm_app.zip" https://releases.mikrosuite.com/mikroapm_app_latest.zip
+
+unzip -q "$ROOT/mikroapm_api.zip" -d "$ROOT/api"
+unzip -q "$ROOT/mikroapm_app.zip" -d "$ROOT/app"
+
+API_DIR="$(find "$ROOT/api" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+APP_DIR="$(find "$ROOT/app" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+
+cd "$API_DIR"
+MIKROAPM_ADMIN_TOKEN="change-me" MIKROAPM_STATIC_ROOT="$APP_DIR" node server.js
+```
+
+Open `http://127.0.0.1:3000`. To use the admin UI or protected admin API, set `MIKROAPM_ADMIN_TOKEN` or `admin.token` in `mikroapm.config.json`, then restart the server.
+
+### Server Runtime
+
+Create `mikroapm.config.json`:
 
 ```json
 {
@@ -20,285 +61,141 @@ Create a `mikroapm.config.json`:
 }
 ```
 
-Start the server:
+Run the server:
 
 ```bash
-npx mikroapm
+MIKROAPM_ADMIN_TOKEN="change-me" \
+node server.js
 ```
 
-Or install globally and run:
-
-```bash
-npm install -g mikroapm
-mikroapm
-```
-
-Open `http://localhost:3000` for the dashboard.
-
-**Built-in scheduler**: Health checks run automatically on startup and every minute by default. Configure the interval with `CHECK_INTERVAL_MINUTES`:
-
-```bash
-CHECK_INTERVAL_MINUTES=5 npx mikroapm  # Check every 5 minutes
-```
-
-To disable the built-in scheduler and trigger checks manually:
-
-```bash
-ENABLE_SCHEDULER=false npx mikroapm
-
-# Then trigger manually
-curl -X POST http://localhost:3000/api/check
-```
+The server stores local data in `./data/mikroapm` by default.
 
 ### Cloudflare Workers
-
-Copy the example config and set your KV namespace ID:
 
 ```bash
 cp wrangler.example.toml wrangler.toml
 # Edit wrangler.toml and set your KV namespace ID
+npx wrangler deploy -c wrangler.toml
 ```
 
-Deploy and configure sites via the API:
+Add monitored sites through the API:
 
 ```bash
-npx wrangler deploy -c wrangler.toml
-
 curl -X POST https://your-worker.workers.dev/api/sites \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $MIKROAPM_ADMIN_TOKEN" \
   -d '[{ "url": "https://example.com", "timeout": 10000 }]'
 ```
 
-Health checks run on a cron schedule (default: every minute). Configure the schedule in `wrangler.toml`:
-
-```toml
-[triggers]
-crons = ["*/5 * * * *"]          # Every 5 minutes
-
-[vars]
-CHECK_INTERVAL_MINUTES = "5"     # Must match cron frequency!
-ENABLE_SUMMARY_WRITES = "false"  # Optional: disable for max efficiency
-```
-
-**Important**: `CHECK_INTERVAL_MINUTES` must match your cron frequency for accurate uptime calculations.
-
-**Cost optimization**: Set `ENABLE_SUMMARY_WRITES = "false"` to stay within KV free tier with 1-minute intervals (near-zero writes for healthy sites).
-
 ## Configuration
 
-MikroAPM uses a **unified configuration system** with precedence: **environment variables > config file > defaults**. This works consistently across both adapters.
+MikroAPM resolves runtime configuration in this order:
 
-### Config file (optional, recommended for server)
+1. Environment variables
+2. Config file
+3. Defaults
 
-Create `mikroapm.config.json` to define sites and default settings. The config is validated using [MikroValid](https://github.com/mikaelvesavuori/mikrovalid).
+Common settings:
+
+- `CHECK_INTERVAL_MINUTES` - health check interval in minutes
+- `ENABLE_SUMMARY_WRITES` - enable or disable daily summary writes
+- `BREVO_API_KEY` - Brevo API key for email alerts
+- `MIKROAPM_ADMIN_TOKEN` - admin password required for admin API writes and site config reads
+- `MIKROAPM_PUBLIC_PASSWORD` - optional password for public status APIs and dashboard data
+- `WEBHOOK_URL` - webhook endpoint for `site.down` and `site.recovered` events
+- `WEBHOOK_SECRET` - optional bearer token sent to the webhook endpoint
+- `ALERT_THRESHOLD` - consecutive failures before alerting
+- `ALERT_FROM_EMAIL`, `ALERT_FROM_NAME`, `ALERT_TO_EMAIL` - email alert metadata
+- `ENABLE_SCHEDULER` - enable server-side scheduler
+- `MIKROAPM_PORT` or `PORT` - server port
+- `MIKROAPM_CONFIG_PATH` or `CONFIG_PATH` - config file path
+- `MIKROAPM_DB_PATH` or `DB_PATH` - PikoDB data directory
+- `MIKROAPM_STATIC_ROOT` - static asset directory for deployed favicons and manifest files
+
+For Cloudflare Workers, keep `CHECK_INTERVAL_MINUTES` aligned with the cron schedule in `wrangler.toml`.
+
+Example server configuration:
 
 ```json
 {
   "sites": [
-    { "url": "https://example.com", "timeout": 10000, "alertEmail": "you@example.com" },
-    { "url": "https://api.example.com/health", "timeout": 5000 }
+    {
+      "name": "Website",
+      "url": "https://example.com",
+      "timeout": 10000,
+      "method": "GET",
+      "expectedStatuses": [200, 204],
+      "expectedText": "Example",
+      "maxLatencyMs": 2000,
+      "retries": 2,
+      "retryDelayMs": 500,
+      "alertEmail": "you@example.com",
+      "maintenanceWindows": [
+        {
+          "start": "2026-05-01T00:00:00.000Z",
+          "end": "2026-05-01T01:00:00.000Z",
+          "reason": "Planned deploy"
+        }
+      ]
+    }
   ],
-  "checkIntervalMinutes": 1,
+  "checkIntervalMinutes": 5,
   "enableSummaryWrites": true,
+  "admin": {
+    "token": "change-me"
+  },
+  "public": {
+    "password": "optional-public-dashboard-password"
+  },
   "alerts": {
     "threshold": 3,
-    "fromEmail": "alerts@yourdomain.com",
+    "webhookUrl": "https://hooks.example.com/mikroapm",
+    "webhookSecret": "shared-secret",
+    "fromEmail": "alerts@example.com",
     "fromName": "MikroAPM",
-    "toEmail": "fallback@example.com"
+    "toEmail": "admin@example.com"
   }
 }
 ```
 
-**Config options:**
+Set `ENABLE_SCHEDULER=false` to run the server without automatic checks and trigger checks manually with `POST /api/check`.
 
-- `sites` — required, at least one entry. Each site needs a `url`; `timeout` (ms) and `alertEmail` are optional.
-- `checkIntervalMinutes` — optional, defaults to `1`. How often health checks run (in minutes).
-  - For the Hono server, this controls the built-in scheduler.
-  - For Cloudflare Workers, this must match your cron schedule in `wrangler.toml`.
-- `enableSummaryWrites` — optional, defaults to `true`.
-  - Set to `false` to disable daily summary writes for maximum cost efficiency. Dashboard will show minimal data (only failures), but write operations are drastically reduced.
-- `alerts` — entirely optional. Omit this section to disable alerting.
-  - If present, the Brevo API key must be set as an environment variable: `BREVO_API_KEY=your-key`.
+Set `paused: true` on a site to stop checks. Use `maintenanceWindows` to suppress checks and notifications during planned downtime. URLs targeting localhost or private networks are rejected unless the site sets `allowPrivateNetwork: true`. Site `name` is optional and defaults to the protocol-less URL.
 
-### Environment Variables
+## Release Downloads
 
-All configuration options can be set via environment variables. **Environment variables always override config file values.**
+Latest release downloads:
 
-#### Core Settings
+- `https://releases.mikrosuite.com/mikroapm_api_latest.zip` - Node service, status/admin UI, and optional Workers bundle
+- `https://releases.mikrosuite.com/mikroapm_app_latest.zip` - static public assets for icons and manifest metadata
 
-| Variable                 | Description                                  | Default | Applies To |
-|--------------------------|----------------------------------------------|---------|------------|
-| `CHECK_INTERVAL_MINUTES` | Health check interval in minutes             | `1`     | Both       |
-| `ENABLE_SUMMARY_WRITES`  | Enable daily summary writes (`true`/`false`) | `true`  | Both       |
-| `BREVO_API_KEY`          | Brevo API key for email alerts               | —       | Both       |
-
-#### Alert Settings
-
-| Variable           | Description                                              | Default                 | Applies To |
-|--------------------|----------------------------------------------------------|-------------------------|------------|
-| `ALERT_THRESHOLD`  | Consecutive failures before alerting                     | `3`                     | Both       |
-| `ALERT_FROM_EMAIL` | Sender email address                                     | `alerts@yourdomain.com` | Both       |
-| `ALERT_FROM_NAME`  | Sender name                                              | `MikroAPM`              | Both       |
-| `ALERT_TO_EMAIL`   | Default recipient (fallback if site has no `alertEmail`) | —                       | Both       |
-
-#### Server-Specific Settings
-
-| Variable           | Description                       | Default                  |
-|--------------------|-----------------------------------|--------------------------|
-| `ENABLE_SCHEDULER` | Enable built-in scheduler         | `true`                   |
-| `PORT`             | Server port                       | `3000`                   |
-| `CONFIG_PATH`      | Path to config file               | `./mikroapm.config.json` |
-| `DB_PATH`          | Path to PikoDB database directory | `./data/mikroapm`        |
-
-**Configuration examples:**
-
-Server with config file:
-
-```bash
-BREVO_API_KEY=your-key npx mikroapm
-```
-
-Server with environment variables only:
-
-```bash
-ALERT_THRESHOLD=5 \
-ALERT_FROM_EMAIL=alerts@example.com \
-ALERT_TO_EMAIL=admin@example.com \
-BREVO_API_KEY=your-key \
-npx mikroapm
-```
-
-Cloudflare Workers (in `wrangler.toml`):
-
-```toml
-[vars]
-CHECK_INTERVAL_MINUTES = "5"
-ALERT_THRESHOLD = "3"
-ALERT_FROM_EMAIL = "alerts@yourdomain.com"
-ALERT_FROM_NAME = "MikroAPM"
-ALERT_TO_EMAIL = "admin@yourdomain.com"
-
-# Set secret via: npx wrangler secret put BREVO_API_KEY
-```
-
-## How check counting works
-
-MikroAPM calculates total checks based on **elapsed time** rather than storing individual check results. Each check cycle updates a daily summary (not individual check records), minimizing storage usage for cost-sensitive environments like Cloudflare Workers with KV.
-
-_The summary writes can be trimmed to near-zero; see below for details._
-
-### Calculation method
-
-Check counts are calculated as:
-
-```javascript
-checksToday = floor((now - effectiveStart) / checkInterval)
-```
-
-Where `effectiveStart` is the most recent of:
-
-- Start of the current day (00:00 UTC)
-- When monitoring first began for this domain
-- When the service/worker last started (for mid-day restarts)
-
-### What gets written per check cycle
-
-**When `ENABLE_SUMMARY_WRITES=true` (default):**
-
-Each check cycle (e.g., every minute) writes:
-
-- 1 update: Daily summary for each monitored site (`summary:domain:date`) — updates failure count and last-checked timestamp
-- 1 write per failure: Failure record only when a check fails (`failure:domain:date:time:timestamp`)
-- 1 write on first check: Monitoring start timestamp per domain (one-time, persisted)
-
-**When `ENABLE_SUMMARY_WRITES=false`:**
-
-Each check cycle writes:
-
-- 0 writes for successful checks
-- 1 write per failure only
-- 1 write on first check: Monitoring start timestamp per domain (one-time, persisted)
-
-**Key insight**: Individual successful check results are NOT stored as separate records. The total check count is derived from time elapsed, not by counting stored records.
-
-### Cost implications for Cloudflare Workers
-
-With Cloudflare KV:
-
-- **Free tier**: 1,000 writes/day, 100,000 reads/day
-- **1 site @ 1-min interval**: ~1,440 writes/day (**exceeds free tier by 44%**)
-- **1 site @ 3-min interval**: ~480 writes/day (**well within free tier**)
-- **1 site @ 5-min interval**: ~288 writes/day (**well within free tier**)
-- **With failures**: Additional 1 write per failed check
-
-**Recommendation**: Use `CHECK_INTERVAL_MINUTES` of 3 or 5 to stay comfortably within free tier limits. A 5-minute interval still provides useful uptime tracking while allowing you to monitor 3+ sites without exceeding the free tier.
-
-**Maximum efficiency**: Set `ENABLE_SUMMARY_WRITES=false` to disable daily summary writes entirely. This reduces writes to near-zero for healthy sites (only failures + one-time monitoring start). Trade-off: Dashboard will show "N/A" for uptime/check counts; only failure history will be visible. Best for alert-focused monitoring where dashboard visibility is not important.
+GitHub Releases provide versioned archives for pinned deployments.
 
 ## API
 
-| Method | Path                          | Description                                           |
-|--------|-------------------------------|-------------------------------------------------------|
-| `GET`  | `/`                           | Dashboard UI                                          |
-| `GET`  | `/mydomain.com`               | Dashboard UI: For site `mydomain.com`                 |
-| `GET`  | `/mydomain.com?days=7`        | Dashboard UI: For site `mydomain.com` (7 day period)  |
-| `GET`  | `/mydomain.com?days=30`       | Dashboard UI: For site `mydomain.com` (30 day period) |
-| `GET`  | `/mydomain.com?days=90`       | Dashboard UI: For site `mydomain.com` (90 day period) |
-| `GET`  | `/api/uptime/:domain?days=30` | Uptime stats for a domain                             |
-| `GET`  | `/api/failures/:domain/:date` | Failure details for a specific day                    |
-| `GET`  | `/api/sites`                  | List monitored sites                                  |
-| `POST` | `/api/sites`                  | Update monitored sites                                |
-| `POST` | `/api/check`                  | Trigger health check (server only)                    |
-| `POST` | `/api/cleanup`                | Clean up expired records (server only)                |
+- `GET /` serves the dashboard UI
+- `GET /admin` serves the admin UI shell; protected actions require the admin password
+- `GET /openapi.json` serves the OpenAPI document
+- `GET /:domain` serves the dashboard UI for a bookmarked configured domain path
+- `GET /api/status` returns current status for all monitored sites; optionally protected by `MIKROAPM_PUBLIC_PASSWORD` or `public.password`
+- `GET /api/status/:domain` returns current status for a configured domain
+- `GET /api/uptime/:domain?days=30` returns uptime stats for a configured domain
+- `GET /api/failures/:domain/:date` returns failure details for a configured domain and day
+- `GET /api/sites` lists full site configuration and requires `Authorization: Bearer <MIKROAPM_ADMIN_TOKEN>`
+- `POST /api/sites` replaces the monitored site list and requires admin auth
+- `POST /api/check` runs checks on demand and requires admin auth
+- `POST /api/cleanup` removes expired records and requires admin auth
 
-## Building
+## Technology
 
-```bash
-npm run build              # Both targets
-npm run build:server       # Hono server → dist/server.js
-npm run build:workers      # CF Workers → dist/workers.js
-```
-
-## Project structure
-
-```text
-mikroapm.config.json       # Site + alert configuration (server)
-src/
-  core/
-    ConfigManager.js       # Loads + validates config (file or env)
-    HealthCheckService.js  # Runs checks, stores failures, triggers alerts
-    AlertService.js        # Email alerts via Brevo (optional)
-    DashboardService.js    # Queries uptime data for the dashboard
-  storage/
-    StorageInterface.js    # Interface (get/put/delete/list)
-    KVStorage.js           # Cloudflare KV
-    PikoDBStorage.js       # PikoDB (file-based)
-  adapters/
-    cf-workers/            # Cloudflare Workers (scheduled + fetch)
-    hono-server/           # Hono on Node.js
-    dashboard-template.js  # Shared dashboard HTML
-examples/
-  cf-workers/worker.js     # Workers entry point
-  server/dev.js            # Dev server
-  server/start.js          # Production server
-```
-
-## Dependencies
-
-The project uses these bundled dependencies:
-
-- [hono](https://hono.dev)
-- [mikrovalid](https://github.com/mikaelvesavuori/mikrovalid)
-- [pikodb](https://github.com/mikaelvesavuori/pikodb)
-
-The rendered UI has a link to the [Inter font family](https://rsms.me/inter/) to make the site look pretty. You can remove it from the dashboard template if you want complete runtime isolation. Just remove:
-
-```html
-<link rel="preconnect" href="https://rsms.me/">
-<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
-```
-
+- **Server**: Hono on Node.js
+- **Workers**: Cloudflare Workers adapter
+- **Storage**: PikoDB or Cloudflare KV
+- **Config**: MikroValid-validated JSON plus environment overrides
+- **Notifications**: Webhook events plus optional Brevo email API
+- **Dashboard**: Server-rendered HTML
+- **Build**: Prebuilt release archives, with esbuild-based server and Workers bundles
 
 ## License
 
-MIT
+MIT. See the [LICENSE](LICENSE) file.

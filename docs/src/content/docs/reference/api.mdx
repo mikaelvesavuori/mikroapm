@@ -1,0 +1,44 @@
+---
+title: API Reference
+description: HTTP endpoints exposed by MikroAPM.
+---
+
+The OpenAPI document is available at `/openapi.json`.
+
+## Public Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/` | Public status dashboard. |
+| `GET` | `/:domain` | Public status dashboard focused on a configured domain. |
+| `GET` | `/openapi.json` | OpenAPI document. |
+| `GET` | `/api/status` | Current status for all monitored sites. |
+| `GET` | `/api/status/:domain` | Current status for one configured domain. |
+| `GET` | `/api/uptime/:domain?days=30` | Uptime summary for a configured domain. |
+| `GET` | `/api/failures/:domain/:date` | Failure details for a configured domain and day. |
+
+Public domain-specific endpoints return `404 SITE_NOT_CONFIGURED` when the domain is not in the monitored site configuration.
+
+When `MIKROAPM_PUBLIC_PASSWORD` or `public.password` is configured, public data endpoints require `x-mikroapm-public-password`.
+
+## Protected Endpoints
+
+These require `Authorization: Bearer <MIKROAPM_ADMIN_TOKEN>` or `x-mikroapm-admin-token`. The browser admin UI presents that same secret as the admin password.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/admin` | Browser admin shell. |
+| `GET` | `/api/sites` | Lists full site configuration. |
+| `POST` | `/api/sites` | Replaces the monitored site list. |
+| `POST` | `/api/check` | Runs checks immediately. |
+| `POST` | `/api/cleanup` | Removes expired records. |
+
+## Example
+
+```bash
+curl \
+  -H "Authorization: Bearer $MIKROAPM_ADMIN_TOKEN" \
+  "https://apm.example.com/api/sites"
+```
+
+Use `/openapi.json` for generated clients or operational documentation.

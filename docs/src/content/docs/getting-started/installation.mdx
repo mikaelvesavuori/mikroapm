@@ -1,0 +1,48 @@
+---
+title: Installation
+description: Run MikroAPM locally as a Node service.
+---
+
+## Requirements
+
+- Node.js 25 or newer.
+- A public domain or reverse proxy for production use.
+
+## Run Locally
+
+```bash
+mkdir -p mikroapm/api mikroapm/app
+ROOT="$PWD/mikroapm"
+
+curl -sSL -o "$ROOT/mikroapm_api.zip" https://releases.mikrosuite.com/mikroapm_api_latest.zip
+curl -sSL -o "$ROOT/mikroapm_app.zip" https://releases.mikrosuite.com/mikroapm_app_latest.zip
+
+unzip -q "$ROOT/mikroapm_api.zip" -d "$ROOT/api"
+unzip -q "$ROOT/mikroapm_app.zip" -d "$ROOT/app"
+
+API_DIR="$(find "$ROOT/api" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+APP_DIR="$(find "$ROOT/app" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+
+cd "$API_DIR"
+cp mikroapm.config.example.json mikroapm.config.json
+MIKROAPM_STATIC_ROOT="$APP_DIR" node server.js
+```
+
+Open `http://127.0.0.1:3000`.
+
+## Add an Admin Password
+
+Set an admin password before using protected API routes or the admin UI:
+
+```bash
+MIKROAPM_ADMIN_TOKEN="replace-with-a-long-random-token" node server.js
+```
+
+The public status dashboard remains available without authentication by default. Set `MIKROAPM_PUBLIC_PASSWORD` or `public.password` in `mikroapm.config.json` to require a password for public status data too. Configuration reads and writes require the admin password.
+
+## Release Downloads
+
+The latest release archives are available from GitHub Releases and these stable URLs:
+
+- `https://releases.mikrosuite.com/mikroapm_api_latest.zip` - Node service, status/admin UI, and optional Workers bundle
+- `https://releases.mikrosuite.com/mikroapm_app_latest.zip` - static public icon and manifest assets

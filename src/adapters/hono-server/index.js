@@ -1,17 +1,39 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import {
   AlertService,
   ConfigManager,
+  createAuthRateLimiter,
   DashboardService,
+  getAdminAuthResult,
+  getPublicAuthResult,
+  getSiteDomain,
   HealthCheckService,
   PikoDBStorage,
+  ValidationError,
 } from "../../index.js";
+import { getAdminHTML } from "../admin-template.js";
 import { getDashboardHTML } from "../dashboard-template.js";
+import { getOpenApiDocument } from "../openapi.js";
 
 // Track when this service session started
 const SERVICE_SESSION_START = Date.now();
+const PUBLIC_ASSET_DIRS = [
+  process.env.MIKROAPM_STATIC_ROOT,
+  process.env.STATIC_ROOT,
+  join(dirname(fileURLToPath(import.meta.url)), "public"),
+  join(dirname(fileURLToPath(import.meta.url)), "../../public"),
+].filter(Boolean);
+
+const PUBLIC_ASSET_TYPES = {
+  ".ico": "image/x-icon",
+  ".png": "image/png",
+  ".svg": "image/svg+xml; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+};
 
 /**
  * Create Hono app for MikroAPM server
@@ -31,6 +53,7 @@ export function createHonoApp(options = {}) {
   } = options;
 
   const app = new Hono();
+  const adminRateLimiter = createAuthRateLimiter();
 
   const storage = providedStorage || new PikoDBStorage(dbPath);
   const raw = readFileSync(configPath, "utf-8");
@@ -53,11 +76,61 @@ export function createHonoApp(options = {}) {
     return c.html(getDashboardHTML());
   });
 
+  app.get("/admin", (c) => {
+    return c.html(getAdminHTML());
+  });
+
+  app.get("/openapi.json", (c) => {
+    return c.json(getOpenApiDocument());
+  });
+
+  app.get("/manifest.webmanifest", (c) => servePublicAsset(c, "manifest.webmanifest"));
+  app.get("/app-icon.svg", (c) => servePublicAsset(c, "app-icon.svg"));
+  app.get("/favicon.svg", (c) => servePublicAsset(c, "favicon.svg"));
+  app.get("/favicon.ico", (c) => servePublicAsset(c, "favicon.ico"));
+  app.get("/favicon-16.png", (c) => servePublicAsset(c, "favicon-16.png"));
+  app.get("/favicon-32.png", (c) => servePublicAsset(c, "favicon-32.png"));
+  app.get("/app-icon-192.png", (c) => servePublicAsset(c, "app-icon-192.png"));
+  app.get("/app-icon-512.png", (c) => servePublicAsset(c, "app-icon-512.png"));
+  app.get("/apple-touch-icon.png", (c) => servePublicAsset(c, "apple-touch-icon.png"));
+
+  app.get("/api/status", async (c) => {
+    const auth = requirePublic(c, configManager, adminRateLimiter);
+    if (auth) return auth;
+
+    try {
+      const sites = await configManager.getSites();
+      return c.json(await dashboardService.getStatusData(sites));
+    } catch (error) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
+  app.get("/api/status/:domain", async (c) => {
+    const auth = requirePublic(c, configManager, adminRateLimiter);
+    if (auth) return auth;
+
+    const domain = decodeURIComponent(c.req.param("domain"));
+
+    try {
+      const site = await getConfiguredSite(configManager, domain);
+      if (!site) return siteNotConfigured(c, domain);
+      return c.json(await dashboardService.getCurrentStatus(domain));
+    } catch (error) {
+      return c.json({ error: error.message }, 500);
+    }
+  });
+
   app.get("/api/uptime/:domain", async (c) => {
-    const domain = c.req.param("domain");
+    const auth = requirePublic(c, configManager, adminRateLimiter);
+    if (auth) return auth;
+
+    const domain = decodeURIComponent(c.req.param("domain"));
     const days = parseInt(c.req.query("days") || "30", 10);
 
     try {
+      const site = await getConfiguredSite(configManager, domain);
+      if (!site) return siteNotConfigured(c, domain);
       const data = await dashboardService.getUptimeData(domain, days);
       return c.json(data);
     } catch (error) {
@@ -66,10 +139,15 @@ export function createHonoApp(options = {}) {
   });
 
   app.get("/api/failures/:domain/:date", async (c) => {
-    const domain = c.req.param("domain");
+    const auth = requirePublic(c, configManager, adminRateLimiter);
+    if (auth) return auth;
+
+    const domain = decodeURIComponent(c.req.param("domain"));
     const date = c.req.param("date");
 
     try {
+      const site = await getConfiguredSite(configManager, domain);
+      if (!site) return siteNotConfigured(c, domain);
       const data = await dashboardService.getDayFailures(domain, date);
       return c.json(data);
     } catch (error) {
@@ -78,6 +156,9 @@ export function createHonoApp(options = {}) {
   });
 
   app.get("/api/sites", async (c) => {
+    const auth = requireAdmin(c, configManager, adminRateLimiter);
+    if (auth) return auth;
+
     try {
       const sites = await configManager.getSites();
       return c.json(sites);
@@ -87,16 +168,25 @@ export function createHonoApp(options = {}) {
   });
 
   app.post("/api/sites", async (c) => {
+    const auth = requireAdmin(c, configManager, adminRateLimiter);
+    if (auth) return auth;
+
     try {
       const sites = await c.req.json();
       await configManager.setSites(sites);
       return c.json({ success: true });
     } catch (error) {
+      if (error instanceof ValidationError) {
+        return c.json({ error: error.message, details: error.details }, 400);
+      }
       return c.json({ error: error.message }, 500);
     }
   });
 
   app.post("/api/check", async (c) => {
+    const auth = requireAdmin(c, configManager, adminRateLimiter);
+    if (auth) return auth;
+
     try {
       const sites = await configManager.getSites();
       await healthCheckService.runChecks(sites);
@@ -110,6 +200,9 @@ export function createHonoApp(options = {}) {
   });
 
   app.post("/api/cleanup", async (c) => {
+    const auth = requireAdmin(c, configManager, adminRateLimiter);
+    if (auth) return auth;
+
     try {
       await storage.cleanup();
       return c.json({ success: true });
@@ -198,3 +291,52 @@ export function startServer(options = {}) {
 }
 
 export default { createHonoApp, startServer };
+
+function requireAdmin(c, configManager, rateLimiter) {
+  const result = getAdminAuthResult(c.req.raw, configManager.getAdminToken(), {
+    rateLimiter,
+  });
+  if (result.ok) return null;
+  const headers = result.retryAfter ? { "Retry-After": String(result.retryAfter) } : undefined;
+  return c.json({ error: result.error }, result.status, headers);
+}
+
+function requirePublic(c, configManager, rateLimiter) {
+  const result = getPublicAuthResult(c.req.raw, configManager.getPublicPassword(), {
+    rateLimiter,
+  });
+  if (result.ok) return null;
+  const headers = result.retryAfter ? { "Retry-After": String(result.retryAfter) } : undefined;
+  return c.json({ error: result.error }, result.status, headers);
+}
+
+async function getConfiguredSite(configManager, domain) {
+  const sites = await configManager.getSites();
+  return sites.find((site) => getSiteDomain(site) === domain);
+}
+
+function siteNotConfigured(c, domain) {
+  return c.json(
+    {
+      code: "SITE_NOT_CONFIGURED",
+      error: `${domain} is not monitored by this MikroAPM instance.`,
+    },
+    404,
+  );
+}
+
+function servePublicAsset(c, fileName) {
+  const filePath = PUBLIC_ASSET_DIRS.map((assetDir) => join(assetDir, fileName)).find((path) =>
+    existsSync(path),
+  );
+
+  if (!filePath) {
+    return c.notFound();
+  }
+
+  const extension = fileName.slice(fileName.lastIndexOf("."));
+  return c.body(readFileSync(filePath), 200, {
+    "Cache-Control": "public, max-age=86400",
+    "Content-Type": PUBLIC_ASSET_TYPES[extension] || "application/octet-stream",
+  });
+}

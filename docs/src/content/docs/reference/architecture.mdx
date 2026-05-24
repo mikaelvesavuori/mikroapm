@@ -1,0 +1,29 @@
+---
+title: Architecture
+description: The runtime shape behind MikroAPM.
+---
+
+MikroAPM is built around a small core and two deployment adapters.
+
+## Core
+
+- `ConfigManager` resolves file, environment, and stored site settings.
+- `SiteValidator` validates URLs and prevents private network checks unless explicitly allowed.
+- `HealthCheckService` performs checks, retries, latency validation, status updates, and daily summaries.
+- `AlertService` sends webhook and optional Brevo email notifications.
+- `DashboardService` shapes public status, uptime, and failure responses.
+
+## Adapters
+
+- **Hono server**: Node runtime with PikoDB storage and a built-in scheduler.
+- **Cloudflare Workers**: Worker runtime with KV storage and cron-triggered checks.
+
+## Storage
+
+The Node server stores data in PikoDB under `MIKROAPM_DB_PATH` or `DB_PATH`. Workers store data in the configured KV namespace.
+
+## Dashboard
+
+The public dashboard is server-rendered HTML with a small browser script. It reads the public status API and does not expose full site configuration.
+
+The admin shell unlocks with the configured admin password and keeps it in browser session storage. Public status data is open by default, or protected by `MIKROAPM_PUBLIC_PASSWORD` / `public.password` when configured.

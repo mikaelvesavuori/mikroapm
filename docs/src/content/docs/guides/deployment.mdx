@@ -1,0 +1,58 @@
+---
+title: Deployment
+description: Deploy MikroAPM as a Node service or Cloudflare Worker.
+---
+
+## Node Server
+
+Download and run the server bundle:
+
+```bash
+mkdir -p /opt/mikroapm/api /opt/mikroapm/app
+
+curl -sSL -o /opt/mikroapm/mikroapm_api.zip https://releases.mikrosuite.com/mikroapm_api_latest.zip
+curl -sSL -o /opt/mikroapm/mikroapm_app.zip https://releases.mikrosuite.com/mikroapm_app_latest.zip
+
+unzip -q /opt/mikroapm/mikroapm_api.zip -d /opt/mikroapm/api
+unzip -q /opt/mikroapm/mikroapm_app.zip -d /opt/mikroapm/app
+
+API_DIR="$(find /opt/mikroapm/api -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+APP_DIR="$(find /opt/mikroapm/app -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+
+cd "$API_DIR"
+cp mikroapm.config.example.json mikroapm.config.json
+MIKROAPM_ADMIN_TOKEN="replace-with-a-long-random-token" MIKROAPM_STATIC_ROOT="$APP_DIR" node server.js
+```
+
+Set these in production:
+
+```bash
+NODE_ENV=production
+MIKROAPM_PORT=3000
+MIKROAPM_CONFIG_PATH=/etc/mikroapm/mikroapm.config.json
+MIKROAPM_DB_PATH=/var/lib/mikroapm
+MIKROAPM_ADMIN_TOKEN=replace-with-a-long-random-token
+MIKROAPM_STATIC_ROOT=/opt/mikroapm/app/mikroapm_app_1.0.0
+```
+
+Use a reverse proxy for TLS and route the public domain to the Node service.
+
+## Cloudflare Workers
+
+The Workers bundle is available from the API release archive when you deploy MikroAPM to Cloudflare Workers.
+
+```bash
+npx wrangler deploy -c wrangler.toml
+```
+
+Start from `wrangler.example.toml`, set a KV namespace, and add secrets:
+
+```bash
+npx wrangler secret put MIKROAPM_ADMIN_TOKEN
+npx wrangler secret put WEBHOOK_SECRET
+npx wrangler secret put BREVO_API_KEY
+```
+
+## Storage
+
+For the Node server, keep `MIKROAPM_DB_PATH` on persistent storage and back it up. For Workers, configure KV retention and write volume with `ENABLE_SUMMARY_WRITES`.

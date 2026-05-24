@@ -1,4 +1,5 @@
 import { MikroValid } from "mikrovalid";
+import { validateSites } from "./SiteValidator.js";
 
 const configSchema = {
   properties: {
@@ -20,6 +21,16 @@ const configSchema = {
       fromEmail: { type: "string", format: "email" },
       fromName: { type: "string" },
       toEmail: { type: "string", format: "email" },
+      webhookUrl: { type: "string" },
+      webhookSecret: { type: "string" },
+    },
+    admin: {
+      type: "object",
+      token: { type: "string" },
+    },
+    public: {
+      type: "object",
+      password: { type: "string" },
     },
     required: ["sites"],
   },
@@ -60,11 +71,13 @@ export class ConfigManager {
         throw new Error(`Invalid config: ${messages}`);
       }
 
-      for (let i = 0; i < configFile.sites.length; i++) {
-        const site = configFile.sites[i];
-        if (!site.url || typeof site.url !== "string") {
-          throw new Error(`Invalid config: sites[${i}].url is required and must be a string`);
-        }
+      try {
+        configFile = {
+          ...configFile,
+          sites: validateSites(configFile.sites),
+        };
+      } catch (error) {
+        throw new Error(`Invalid config: ${error.message}`);
       }
     }
 
@@ -82,6 +95,9 @@ export class ConfigManager {
         true,
       ),
       alerts: ConfigManager._resolveAlerts(env, configFile.alerts),
+      adminToken: env.MIKROAPM_ADMIN_TOKEN || env.ADMIN_TOKEN || configFile.admin?.token,
+      publicPassword:
+        env.MIKROAPM_PUBLIC_PASSWORD || env.PUBLIC_PASSWORD || configFile.public?.password,
     };
 
     return new ConfigManager(storage, config, env);
@@ -91,8 +107,11 @@ export class ConfigManager {
    * Resolve alert configuration with precedence: env vars > config file > defaults
    */
   static _resolveAlerts(env, fileAlerts) {
-    const hasEnvAlerts = env.ALERT_FROM_EMAIL || env.ALERT_TO_EMAIL;
-    const hasFileAlerts = fileAlerts && (fileAlerts.fromEmail || fileAlerts.toEmail);
+    const envWebhookUrl = env.WEBHOOK_URL || env.NOTIFICATION_WEBHOOK_URL;
+    const envWebhookSecret = env.WEBHOOK_SECRET || env.NOTIFICATION_WEBHOOK_SECRET;
+    const hasEnvAlerts = env.ALERT_FROM_EMAIL || env.ALERT_TO_EMAIL || envWebhookUrl;
+    const hasFileAlerts =
+      fileAlerts && (fileAlerts.fromEmail || fileAlerts.toEmail || fileAlerts.webhookUrl);
 
     if (!hasEnvAlerts && !hasFileAlerts) return undefined;
 
@@ -101,6 +120,8 @@ export class ConfigManager {
       fromEmail: env.ALERT_FROM_EMAIL || fileAlerts?.fromEmail || "alerts@yourdomain.com",
       fromName: env.ALERT_FROM_NAME || fileAlerts?.fromName || "MikroAPM",
       toEmail: env.ALERT_TO_EMAIL || fileAlerts?.toEmail,
+      webhookUrl: envWebhookUrl || fileAlerts?.webhookUrl,
+      webhookSecret: envWebhookSecret || fileAlerts?.webhookSecret,
     };
   }
 
@@ -110,7 +131,7 @@ export class ConfigManager {
   static _resolveNumber(envValue, fileValue, defaultValue) {
     if (envValue !== undefined) {
       const parsed = parseInt(envValue, 10);
-      return Number.isNaN(parsed) ? defaultValue : parsed;
+      return Number.isNaN(parsed) ? (fileValue ?? defaultValue) : parsed;
     }
     return fileValue !== undefined ? fileValue : defaultValue;
   }
@@ -120,14 +141,16 @@ export class ConfigManager {
    */
   static _resolveBoolean(envValue, fileValue, defaultValue) {
     if (envValue !== undefined) {
-      return envValue === "true" || envValue === true;
+      if (envValue === "true" || envValue === true) return true;
+      if (envValue === "false" || envValue === false) return false;
+      return fileValue ?? defaultValue;
     }
     return fileValue !== undefined ? fileValue : defaultValue;
   }
 
   async getSites() {
     const stored = await this.storage.get("config:sites", "json");
-    if (stored) return stored;
+    if (stored) return validateSites(stored, { allowEmpty: true });
 
     if (this.config.sites.length > 0) return this.config.sites;
 
@@ -135,7 +158,8 @@ export class ConfigManager {
   }
 
   async setSites(sites) {
-    await this.storage.put("config:sites", JSON.stringify(sites));
+    const validatedSites = validateSites(sites);
+    await this.storage.put("config:sites", JSON.stringify(validatedSites));
   }
 
   hasAlerts() {
@@ -162,19 +186,27 @@ export class ConfigManager {
     return this.env.BREVO_API_KEY;
   }
 
+  getAdminToken() {
+    return this.config.adminToken;
+  }
+
+  getPublicPassword() {
+    return this.config.publicPassword;
+  }
+
+  getWebhookUrl() {
+    return this.config.alerts?.webhookUrl;
+  }
+
+  getWebhookSecret() {
+    return this.config.alerts?.webhookSecret;
+  }
+
   getCheckIntervalMinutes() {
-    // Priority: env var > config file > default
-    if (this.env.CHECK_INTERVAL_MINUTES) {
-      return parseInt(this.env.CHECK_INTERVAL_MINUTES, 10);
-    }
     return this.config.checkIntervalMinutes || 1;
   }
 
   getEnableSummaryWrites() {
-    // Priority: env var > config file > default (true)
-    if (this.env.ENABLE_SUMMARY_WRITES !== undefined) {
-      return this.env.ENABLE_SUMMARY_WRITES === "true" || this.env.ENABLE_SUMMARY_WRITES === true;
-    }
     return this.config.enableSummaryWrites !== false;
   }
 }
